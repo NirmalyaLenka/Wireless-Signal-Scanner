@@ -1,0 +1,108 @@
+Wireless Signal Scanner - Physical Wiring Diagram
+==================================================
+
+This diagram shows how to wire the three components on a breadboard.
+Columns on the left rail are for nRF24L01; right side for OLED.
+Power rails run along both edges of the breadboard.
+
+BREADBOARD TOP VIEW (simplified)
+=================================
+
+         +----------------------------------+
+    +3V3 |==[  ]==============================|
+    GND  |==[  ]==============================|
+         |                                  |
+         |  ESP32 Development Board         |
+         |  +----------------------------+  |
+         |  | 3V3  GND  GPIO4  GPIO5    |  |
+         |  | GPIO18 GPIO19 GPIO23      |  |
+         |  | GPIO21 GPIO22             |  |
+         |  +----------------------------+  |
+         |                                  |
+         |  nRF24L01+ Module                |
+         |  +-----------+                   |
+         |  | 1:GND     |--- to GND rail    |
+         |  | 2:VCC     |--- to 3V3 rail    |
+         |  | 3:CE      |--- to GPIO 4      |
+         |  | 4:CSN     |--- to GPIO 5      |
+         |  | 5:SCK     |--- to GPIO 18     |
+         |  | 6:MOSI    |--- to GPIO 23     |
+         |  | 7:MISO    |--- to GPIO 19     |
+         |  | 8:IRQ     |--- not connected  |
+         |  +-----------+                   |
+         |  [C1: 100uF cap across VCC-GND]  |
+         |                                  |
+         |  SSD1306 OLED 0.96"              |
+         |  +----------+                    |
+         |  | GND      |--- to GND rail     |
+         |  | VCC      |--- to 3V3 rail     |
+         |  | SCL      |--- to GPIO 22      |
+         |  | SDA      |--- to GPIO 21      |
+         |  +----------+                    |
+         |                                  |
+         +----------------------------------+
+
+
+nRF24L01+ Pin Layout (top view of 8-pin module)
+================================================
+
+        +-----+
+  GND --| 1  2|-- VCC
+   CE --| 3  4|-- CSN
+  SCK --| 5  6|-- MOSI
+ MISO --| 7  8|-- IRQ (not used)
+        +-----+
+
+Note: Pin 1 is at the top-left when the antenna faces away from you.
+The pinout is consistent across all standard nRF24L01 and nRF24L01+ modules.
+
+
+SSD1306 OLED Pin Layout (4-pin I2C breakout)
+=============================================
+
+  GND  VCC  SCL  SDA
+   |    |    |    |
+   |    |    |    |
+  GND  3V3  G22  G21   (ESP32 pins)
+
+
+Complete Wire List
+==================
+
+nRF24L01 VCC   --> ESP32 3.3V
+nRF24L01 GND   --> ESP32 GND
+nRF24L01 CE    --> ESP32 GPIO 4
+nRF24L01 CSN   --> ESP32 GPIO 5
+nRF24L01 SCK   --> ESP32 GPIO 18
+nRF24L01 MOSI  --> ESP32 GPIO 23
+nRF24L01 MISO  --> ESP32 GPIO 19
+
+100uF capacitor positive leg --> nRF24L01 VCC
+100uF capacitor negative leg --> nRF24L01 GND
+
+SSD1306 VCC    --> ESP32 3.3V
+SSD1306 GND    --> ESP32 GND
+SSD1306 SCL    --> ESP32 GPIO 22
+SSD1306 SDA    --> ESP32 GPIO 21
+
+Total wires: 13 (excluding the capacitor)
+
+
+Common Mistakes to Avoid
+=========================
+
+1. Connecting nRF24L01 VCC to 5V instead of 3.3V destroys the module instantly.
+   Always triple-check VCC before powering on.
+
+2. Swapping MOSI and MISO on the nRF24L01 causes radio.begin() to fail.
+   MOSI from the ESP32 goes to MOSI on the module (pin 6).
+   MISO from the ESP32 goes to MISO on the module (pin 7).
+
+3. Forgetting the 100uF capacitor across the nRF24L01 power pins.
+   The module will power on but crash randomly or fail to initialise.
+   This is the most common debugging issue with this module.
+
+4. Swapping SDA and SCL on the OLED causes the display to not respond.
+
+5. Long jumper wires between the ESP32 and nRF24L01 (over 10 cm) can cause
+   SPI communication errors at high clock speeds. Keep SPI wires short.
