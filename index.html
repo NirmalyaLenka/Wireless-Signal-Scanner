@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Wireless Signal Scanner - ESP32 + nRF24L01</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;400;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #080c10;
+    --bg2: #0d1117;
+    --bg3: #111820;
+    --surface: #141c24;
+    --surface2: #1a2433;
+    --border: #1e2d3d;
+    --border2: #243347;
+    --green: #00ff88;
+    --green2: #00cc6a;
+    --green3: #004d28;
+    --cyan: #00e5ff;
+    --cyan2: #0099bb;
+    --amber: #ffaa00;
+    --red: #ff4444;
+    --text: #d0e8d0;
+    --text2: #7a9a8a;
+    --text3: #3d5a48;
+    --mono: 'Share Tech Mono', monospace;
+    --sans: 'Exo 2', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-weight: 300;
+    line-height: 1.7;
+    overflow-x: hidden;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,255,136,0.015) 2px,
+      rgba(0,255,136,0.015) 4px
+    );
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 2rem; }
+
+  /* NAV */
+  nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(8,12,16,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 0.9rem 0;
+  }
+  nav .inner {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .nav-logo {
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    color: var(--green);
+    letter-spacing: 0.08em;
+  }
+  .nav-links {
+    display: flex;
+    gap: 2rem;
+    list-style: none;
+  }
+  .nav-links a {
+    font-size: 0.8rem;
+    font-weight: 400;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text2);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+  .nav-links a:hover { color: var(--green); }
+
+  /* HERO */
+  .hero {
+    min-height: 92vh;
+    display: flex;
+    align-items: center;
+    position: relative;
+    padding: 6rem 0 4rem;
+    overflow: hidden;
+  }
+  .hero-bg-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,255,136,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,136,0.04) 1px, transparent 1px);
+    background-size: 48px 48px;
+    animation: gridPan 20s linear infinite;
+  }
+  @keyframes gridPan {
+    from { background-position: 0 0; }
+    to   { background-position: 48px 48px; }
+  }
+  .hero-content {
+    position: relative;
+    z-index: 2;
+  }
+  .hero-tag {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--green);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    border: 1px solid var(--green3);
+    background: rgba(0,77,40,0.3);
+    display: inline-block;
+    padding: 0.3rem 0.9rem;
+    border-radius: 2px;
+    margin-bottom: 1.5rem;
+  }
+  .hero h1 {
+    font-size: clamp(2.4rem, 5vw, 4.2rem);
+    font-weight: 700;
+    line-height: 1.1;
+    margin-bottom: 1.2rem;
+    color: #fff;
+  }
+  .hero h1 span { color: var(--green); }
+  .hero-sub {
+    font-size: 1.05rem;
+    color: var(--text2);
+    max-width: 560px;
+    margin-bottom: 2.5rem;
+    line-height: 1.8;
+  }
+  .btn-row { display: flex; gap: 1rem; flex-wrap: wrap; }
+  .btn {
+    font-family: var(--sans);
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.75rem 1.8rem;
+    border-radius: 3px;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-block;
+  }
+  .btn-primary {
+    background: var(--green);
+    color: #040c08;
+    border: 1px solid var(--green);
+  }
+  .btn-primary:hover { background: var(--green2); border-color: var(--green2); }
+  .btn-outline {
+    background: transparent;
+    color: var(--green);
+    border: 1px solid var(--border2);
+  }
+  .btn-outline:hover { border-color: var(--green); background: rgba(0,255,136,0.06); }
+
+  /* Floating device mockup */
+  .hero-visual {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 420px;
+    opacity: 0.85;
+  }
+  @media (max-width: 900px) { .hero-visual { display: none; } }
+
+  /* OLED DEMO */
+  .oled-section {
+    padding: 6rem 0;
+    background: var(--bg2);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  .section-label {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--green);
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    margin-bottom: 0.6rem;
+  }
+  .section-title {
+    font-size: clamp(1.6rem, 3vw, 2.4rem);
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 0.6rem;
+  }
+  .section-desc {
+    font-size: 0.95rem;
+    color: var(--text2);
+    max-width: 520px;
+    margin-bottom: 3rem;
+  }
+  .demo-layout {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 3rem;
+    align-items: start;
+  }
+  @media (max-width: 760px) { .demo-layout { grid-template-columns: 1fr; } }
+
+  /* OLED screen */
+  .oled-frame {
+    width: 220px;
+    background: #0a0a0a;
+    border: 3px solid #2a2a2a;
+    border-radius: 8px;
+    padding: 8px;
+    box-shadow: 0 0 40px rgba(0,255,136,0.12), inset 0 0 20px rgba(0,0,0,0.8);
+    flex-shrink: 0;
+  }
+  .oled-screen {
+    width: 100%;
+    aspect-ratio: 2/1;
+    background: #000;
+    border-radius: 2px;
+    padding: 6px 7px;
+    font-family: var(--mono);
+    font-size: 7.5px;
+    line-height: 1.45;
+    overflow: hidden;
+    position: relative;
+  }
+  .oled-line { color: #00ff88; white-space: nowrap; }
+  .oled-line.dim { color: #004d28; }
+  .oled-line.header {
+    color: #00ffcc;
+    font-size: 7px;
+    letter-spacing: 0.05em;
+    margin-bottom: 1px;
+  }
+  .oled-line.big {
+    font-size: 13px;
+    font-weight: bold;
+    color: #00ff88;
+    line-height: 1.2;
+  }
+  .oled-divider {
+    height: 1px;
+    background: #00ff44;
+    margin: 2px 0;
+    opacity: 0.5;
+  }
+  .oled-cursor {
+    display: inline-block;
+    width: 5px;
+    height: 8px;
+    background: #00ff88;
+    vertical-align: middle;
+    animation: blink 1s step-end infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .demo-controls { padding-top: 0.5rem; }
+  .demo-controls h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 1rem;
+  }
+  .channel-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .ch-btn {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    padding: 0.3rem 0.7rem;
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    color: var(--text2);
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .ch-btn:hover, .ch-btn.active {
+    background: rgba(0,255,136,0.12);
+    border-color: var(--green);
+    color: var(--green);
+  }
+  .scan-btn {
+    font-family: var(--sans);
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.65rem 1.5rem;
+    background: transparent;
+    color: var(--green);
+    border: 1px solid var(--green);
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .scan-btn:hover { background: rgba(0,255,136,0.1); }
+  .scan-btn.scanning {
+    color: var(--amber);
+    border-color: var(--amber);
+    animation: pulse 1s ease-in-out infinite;
+  }
+  @keyframes pulse { 50% { opacity: 0.5; } }
+  .freq-note {
+    font-size: 0.78rem;
+    color: var(--text3);
+    margin-top: 1rem;
+    font-family: var(--mono);
+  }
+
+  /* SPECTRUM VISUALIZER */
+  .spectrum-section {
+    padding: 5rem 0;
+    background: var(--bg);
+  }
+  .spectrum-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.5rem;
+    margin-top: 2rem;
+  }
+  .spectrum-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+  .spectrum-title {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--text2);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+  .live-dot {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--green);
+  }
+  .live-dot::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  canvas#spectrum {
+    width: 100%;
+    height: 160px;
+    display: block;
+  }
+  .x-labels {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 0.5rem;
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--text3);
+  }
+
+  /* FILE TREE */
+  .files-section {
+    padding: 5rem 0;
+    background: var(--bg2);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  .file-tree {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.5rem 1.8rem;
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    line-height: 2;
+    margin-top: 2rem;
+    max-width: 480px;
+  }
+  .ft-dir { color: var(--cyan); }
+  .ft-file { color: var(--text2); }
+  .ft-file:hover { color: var(--green); cursor: default; }
+  .ft-note { color: var(--text3); font-size: 0.72rem; }
+
+  /* ADVANTAGES / DISADVANTAGES */
+  .adv-section { padding: 5rem 0; }
+  .adv-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-top: 2.5rem;
+  }
+  @media (max-width: 700px) { .adv-grid { grid-template-columns: 1fr; } }
+
+  .adv-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.8rem;
+  }
+  .adv-card.pro { border-top: 2px solid var(--green); }
+  .adv-card.con { border-top: 2px solid var(--red); }
+  .adv-card h3 {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 1.2rem;
+    font-family: var(--mono);
+  }
+  .adv-card.pro h3 { color: var(--green); }
+  .adv-card.con h3 { color: var(--red); }
+  .adv-list { list-style: none; }
+  .adv-list li {
+    font-size: 0.88rem;
+    color: var(--text2);
+    padding: 0.45rem 0;
+    border-bottom: 1px solid var(--border);
+    padding-left: 1.2rem;
+    position: relative;
+  }
+  .adv-list li:last-child { border-bottom: none; }
+  .adv-list li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+  }
+  .pro .adv-list li::before { background: var(--green3); }
+  .con .adv-list li::before { background: #441111; }
+
+  /* FUTURE SCOPE */
+  .future-section {
+    padding: 5rem 0;
+    background: var(--bg2);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  .future-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1.2rem;
+    margin-top: 2.5rem;
+  }
+  .future-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.5rem;
+    transition: border-color 0.2s;
+  }
+  .future-card:hover { border-color: var(--border2); }
+  .future-num {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--text3);
+    letter-spacing: 0.15em;
+    margin-bottom: 0.6rem;
+  }
+  .future-card h4 {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 0.5rem;
+  }
+  .future-card p {
+    font-size: 0.82rem;
+    color: var(--text2);
+    line-height: 1.65;
+  }
+
+  /* HOW IT WORKS */
+  .how-section { padding: 5rem 0; }
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0;
+    margin-top: 2.5rem;
+    position: relative;
+  }
+  .steps::before {
+    content: '';
+    position: absolute;
+    top: 28px;
+    left: 10%;
+    width: 80%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border2), var(--border2), transparent);
+  }
+  .step {
+    text-align: center;
+    padding: 0 1rem;
+    position: relative;
+  }
+  .step-num {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 0.9rem;
+    color: var(--green);
+    margin: 0 auto 1rem;
+    position: relative;
+    z-index: 2;
+  }
+  .step h4 {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 0.4rem;
+  }
+  .step p {
+    font-size: 0.78rem;
+    color: var(--text2);
+    line-height: 1.6;
+  }
+
+  /* CONTACT */
+  .contact-section {
+    padding: 6rem 0;
+    background: var(--bg);
+    text-align: center;
+  }
+  .contact-card {
+    max-width: 520px;
+    margin: 2rem auto 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 2.5rem;
+  }
+  .contact-card p {
+    font-size: 0.88rem;
+    color: var(--text2);
+    margin-bottom: 1.5rem;
+    line-height: 1.7;
+  }
+  .email-link {
+    font-family: var(--mono);
+    font-size: 1rem;
+    color: var(--green);
+    text-decoration: none;
+    border: 1px solid var(--green3);
+    padding: 0.7rem 1.8rem;
+    border-radius: 3px;
+    background: rgba(0,77,40,0.2);
+    display: inline-block;
+    transition: all 0.2s;
+  }
+  .email-link:hover {
+    background: rgba(0,255,136,0.12);
+    border-color: var(--green);
+  }
+  .contact-meta {
+    margin-top: 1.5rem;
+    font-size: 0.75rem;
+    color: var(--text3);
+    font-family: var(--mono);
+  }
+
+  /* FOOTER */
+  footer {
+    background: var(--bg2);
+    border-top: 1px solid var(--border);
+    padding: 1.8rem 0;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--text3);
+    letter-spacing: 0.1em;
+  }
+
+  /* UTIL */
+  .divider { height: 1px; background: var(--border); margin: 0; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .fade-up { animation: fadeUp 0.6s ease both; }
+  .delay-1 { animation-delay: 0.1s; }
+  .delay-2 { animation-delay: 0.22s; }
+  .delay-3 { animation-delay: 0.34s; }
+  .delay-4 { animation-delay: 0.46s; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="inner">
+    <span class="nav-logo">[ WIRELESS_SCANNER_v1.0 ]</span>
+    <ul class="nav-links">
+      <li><a href="#demo">Demo</a></li>
+      <li><a href="#files">Files</a></li>
+      <li><a href="#adv">Analysis</a></li>
+      <li><a href="#future">Roadmap</a></li>
+      <li><a href="#contact">Contact</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-bg-grid"></div>
+  <div class="container hero-content">
+    <div class="hero-tag fade-up">Open Source Hardware Project</div>
+    <h1 class="fade-up delay-1">2.4 GHz <span>Wireless</span><br>Signal Scanner</h1>
+    <p class="hero-sub fade-up delay-2">
+      Passive RF channel detection using ESP32, nRF24L01, and a 0.96-inch OLED.
+      Sweeps all 128 channels of the 2.4 GHz band and displays active signals
+      one by one in real time.
+    </p>
+    <div class="btn-row fade-up delay-3">
+      <a href="#demo" class="btn btn-primary">Live Demo</a>
+      <a href="#files" class="btn btn-outline">Browse Files</a>
+    </div>
+  </div>
+
+  <!-- SVG device sketch -->
+  <div class="hero-visual">
+    <svg viewBox="0 0 400 320" xmlns="http://www.w3.org/2000/svg" style="width:100%">
+      <!-- ESP32 board -->
+      <rect x="120" y="80" width="160" height="90" rx="4" fill="#0d1117" stroke="#243347" stroke-width="1.5"/>
+      <text x="200" y="132" text-anchor="middle" font-family="Share Tech Mono,monospace" font-size="11" fill="#00ff88">ESP32</text>
+      <!-- GPIO pins left -->
+      <g fill="#1a2433" stroke="#243347" stroke-width="1">
+        <rect x="100" y="88" width="18" height="5" rx="1"/>
+        <rect x="100" y="98" width="18" height="5" rx="1"/>
+        <rect x="100" y="108" width="18" height="5" rx="1"/>
+        <rect x="100" y="118" width="18" height="5" rx="1"/>
+        <rect x="100" y="128" width="18" height="5" rx="1"/>
+        <rect x="100" y="138" width="18" height="5" rx="1"/>
+        <rect x="100" y="148" width="18" height="5" rx="1"/>
+        <rect x="100" y="158" width="18" height="5" rx="1"/>
+      </g>
+      <!-- GPIO pins right -->
+      <g fill="#1a2433" stroke="#243347" stroke-width="1">
+        <rect x="282" y="88" width="18" height="5" rx="1"/>
+        <rect x="282" y="98" width="18" height="5" rx="1"/>
+        <rect x="282" y="108" width="18" height="5" rx="1"/>
+        <rect x="282" y="118" width="18" height="5" rx="1"/>
+        <rect x="282" y="128" width="18" height="5" rx="1"/>
+        <rect x="282" y="138" width="18" height="5" rx="1"/>
+        <rect x="282" y="148" width="18" height="5" rx="1"/>
+        <rect x="282" y="158" width="18" height="5" rx="1"/>
+      </g>
+      <!-- nRF24L01 module -->
+      <rect x="30" y="190" width="110" height="70" rx="3" fill="#0a1018" stroke="#1e2d3d" stroke-width="1.5"/>
+      <rect x="80" y="176" width="20" height="16" rx="2" fill="#1a2433" stroke="#00ff88" stroke-width="0.8"/>
+      <text x="85" y="188" font-family="Share Tech Mono,monospace" font-size="7" fill="#00ff8866">ANT</text>
+      <text x="85" y="233" text-anchor="middle" font-family="Share Tech Mono,monospace" font-size="9" fill="#00e5ff">nRF24L01+</text>
+      <!-- OLED display -->
+      <rect x="256" y="195" width="114" height="58" rx="4" fill="#060606" stroke="#2a2a2a" stroke-width="2"/>
+      <rect x="263" y="201" width="100" height="46" rx="2" fill="#000"/>
+      <text x="313" y="214" text-anchor="middle" font-family="Share Tech Mono,monospace" font-size="6.5" fill="#00ffcc">SIGNAL DETECTED</text>
+      <line x1="263" y1="217" x2="363" y2="217" stroke="#00ff44" stroke-width="0.5" opacity="0.5"/>
+      <text x="268" y="228" font-family="Share Tech Mono,monospace" font-size="10" fill="#00ff88">CH: 6</text>
+      <text x="268" y="237" font-family="Share Tech Mono,monospace" font-size="6.5" fill="#00ff88">Freq: 2406 MHz</text>
+      <text x="268" y="246" font-family="Share Tech Mono,monospace" font-size="6" fill="#00ff88">Sig: [######....]</text>
+      <!-- Wires SPI -->
+      <line x1="100" y1="108" x2="30" y2="200" stroke="#00ff8844" stroke-width="1" stroke-dasharray="3,3"/>
+      <line x1="100" y1="118" x2="30" y2="208" stroke="#00e5ff44" stroke-width="1" stroke-dasharray="3,3"/>
+      <line x1="100" y1="128" x2="30" y2="216" stroke="#00ff8833" stroke-width="1" stroke-dasharray="3,3"/>
+      <!-- Wires I2C -->
+      <line x1="282" y1="128" x2="370" y2="200" stroke="#00e5ff44" stroke-width="1" stroke-dasharray="3,3"/>
+      <line x1="282" y1="138" x2="370" y2="208" stroke="#00ff8833" stroke-width="1" stroke-dasharray="3,3"/>
+    </svg>
+  </div>
+</section>
+
+<!-- OLED DEMO -->
+<section class="oled-section" id="demo">
+  <div class="container">
+    <div class="section-label">Interactive Demo</div>
+    <h2 class="section-title">OLED Display Simulation</h2>
+    <p class="section-desc">Click a channel to see what the physical 0.96-inch OLED displays on the device, or run an automatic scan cycle.</p>
+
+    <div class="demo-layout">
+      <div class="oled-frame">
+        <div class="oled-screen" id="oledScreen">
+          <div class="oled-line header">SIGNAL DETECTED</div>
+          <div class="oled-divider"></div>
+          <div class="oled-line big" id="oledCh">CH: --</div>
+          <div class="oled-line" id="oledFreq">Freq: ---- MHz</div>
+          <div class="oled-line" id="oledBar">Sig: [..........]</div>
+          <div class="oled-line" id="oledHits">Hits: --/64</div>
+          <div class="oled-line dim" id="oledIdle">Scanning... <span class="oled-cursor"></span></div>
+        </div>
+      </div>
+
+      <div class="demo-controls">
+        <h3>Simulated Active Channels</h3>
+        <div class="channel-list" id="channelList"></div>
+        <button class="scan-btn" id="scanBtn" onclick="startScan()">Run Scan Cycle</button>
+        <p class="freq-note">
+          CH 1 = 2401 MHz (Wi-Fi) &nbsp;|&nbsp;
+          CH 6 = 2406 MHz (Wi-Fi) &nbsp;|&nbsp;
+          CH 11 = 2411 MHz (Wi-Fi)
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SPECTRUM -->
+<section class="spectrum-section">
+  <div class="container">
+    <div class="section-label">RF Visualization</div>
+    <h2 class="section-title">Live Spectrum Display</h2>
+    <p class="section-desc">A simulated representation of the 2.4 GHz band. Known Wi-Fi channels and common interference sources are highlighted.</p>
+
+    <div class="spectrum-wrap">
+      <div class="spectrum-header">
+        <span class="spectrum-title">2400 MHz &mdash; 2527 MHz / 128 Channels</span>
+        <span class="live-dot">Simulating</span>
+      </div>
+      <canvas id="spectrum"></canvas>
+      <div class="x-labels">
+        <span>2400</span><span>2412</span><span>2427</span><span>2437</span>
+        <span>2452</span><span>2462</span><span>2480</span><span>2527 MHz</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FILES -->
+<section class="files-section" id="files">
+  <div class="container">
+    <div class="section-label">Project Structure</div>
+    <h2 class="section-title">Repository Layout</h2>
+    <p class="section-desc">Every file in the project and what it contains.</p>
+
+    <div class="file-tree">
+      <div class="ft-dir">wireless-scanner/</div>
+      <div style="padding-left:1.2rem">
+        <div class="ft-dir">src/</div>
+        <div style="padding-left:1.2rem">
+          <div class="ft-file">wireless_scanner.ino <span class="ft-note">-- main sketch</span></div>
+        </div>
+        <div class="ft-dir">docs/</div>
+        <div style="padding-left:1.2rem">
+          <div class="ft-file">code_explanation.md <span class="ft-note">-- how the code works</span></div>
+          <div class="ft-file">hardware_explanation.md <span class="ft-note">-- how the hardware works</span></div>
+        </div>
+        <div class="ft-dir">hardware/</div>
+        <div style="padding-left:1.2rem">
+          <div class="ft-file">wiring_diagram.txt <span class="ft-note">-- ASCII pin diagram</span></div>
+        </div>
+        <div class="ft-dir">schematics/</div>
+        <div style="padding-left:1.2rem">
+          <div class="ft-file">schematic_notes.md <span class="ft-note">-- pin-level schematic</span></div>
+        </div>
+        <div class="ft-file">README.md <span class="ft-note">-- full project guide</span></div>
+        <div class="ft-file">demo.html <span class="ft-note">-- this page</span></div>
+        <div class="ft-file">LICENSE <span class="ft-note">-- MIT</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="how-section">
+  <div class="container">
+    <div class="section-label">Operation</div>
+    <h2 class="section-title">How It Works</h2>
+    <p class="section-desc">Four stages, running in a continuous loop from the moment power is applied.</p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">01</div>
+        <h4>Tune Channel</h4>
+        <p>Radio is set to RX mode. ESP32 programs the nRF24L01 synthesiser to the next channel (0-127).</p>
+      </div>
+      <div class="step">
+        <div class="step-num">02</div>
+        <h4>Sample RPD</h4>
+        <p>The RPD register is read 64 times. Each read above -64 dBm increments the hit counter for that channel.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">03</div>
+        <h4>Threshold Check</h4>
+        <p>After scanning all 128 channels, any channel with 2 or more hits is flagged as active.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">04</div>
+        <h4>OLED Display</h4>
+        <p>Each active channel is shown on screen for 1.8 seconds, then the device loops back to step 01.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ADVANTAGES / DISADVANTAGES -->
+<section class="adv-section" id="adv">
+  <div class="container">
+    <div class="section-label">Analysis</div>
+    <h2 class="section-title">Advantages and Limitations</h2>
+    <p class="section-desc">An honest breakdown of what this device does well and where its boundaries lie.</p>
+
+    <div class="adv-grid">
+      <div class="adv-card pro">
+        <h3>Advantages</h3>
+        <ul class="adv-list">
+          <li>Completely passive: does not transmit any signal during scanning</li>
+          <li>Protocol-agnostic: detects Wi-Fi, Bluetooth, Zigbee, RC, and anything else in the 2.4 GHz band</li>
+          <li>Very low component cost, under 5 USD in total hardware</li>
+          <li>Standalone operation: needs no computer, no phone, no app</li>
+          <li>Full 128-channel sweep takes approximately one second</li>
+          <li>Serial output for logging when connected over USB</li>
+          <li>All parameters are single-line constants at the top of the sketch</li>
+          <li>Open source with full documentation in plain English</li>
+        </ul>
+      </div>
+      <div class="adv-card con">
+        <h3>Limitations</h3>
+        <ul class="adv-list">
+          <li>Detection threshold is fixed at -64 dBm by the nRF24L01 silicon</li>
+          <li>Cannot decode, read, or identify the content of any signal</li>
+          <li>Scans one channel at a time, so fast burst transmissions may be missed</li>
+          <li>No display of SSID, device name, or any protocol metadata</li>
+          <li>Cannot distinguish between signal types on the same channel</li>
+          <li>0.96-inch OLED is small, not suitable for viewing from a distance</li>
+          <li>nRF24L01 requires a stable 3.3 V supply with a decoupling capacitor</li>
+          <li>No data logging or history without additional hardware or code</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FUTURE SCOPE -->
+<section class="future-section" id="future">
+  <div class="container">
+    <div class="section-label">Roadmap</div>
+    <h2 class="section-title">Future Scope</h2>
+    <p class="section-desc">Planned and suggested directions for expanding this project beyond its current state.</p>
+
+    <div class="future-grid">
+      <div class="future-card">
+        <div class="future-num">01 / DISPLAY</div>
+        <h4>Larger OLED or TFT Screen</h4>
+        <p>Upgrading to a 1.3-inch SSD1306 or a 2.4-inch ILI9341 TFT would allow a full spectrum waterfall display showing all 128 channels simultaneously as a scrolling heatmap.</p>
+      </div>
+      <div class="future-card">
+        <div class="future-num">02 / PROTOCOL</div>
+        <h4>Protocol Identification</h4>
+        <p>Adding logic to classify channels: Wi-Fi channels 1, 6, 11 and 13; Bluetooth frequency hopping range; Zigbee channels. Each detected signal could show a protocol label instead of just a frequency.</p>
+      </div>
+      <div class="future-card">
+        <div class="future-num">03 / LOGGING</div>
+        <h4>SD Card Data Logging</h4>
+        <p>An SD card module on the SPI bus would allow timestamped CSV logging of every scan cycle. This enables long-duration monitoring and offline analysis in a spreadsheet.</p>
+      </div>
+      <div class="future-card">
+        <div class="future-num">04 / WIRELESS</div>
+        <h4>Wi-Fi Web Dashboard</h4>
+        <p>The ESP32 has built-in Wi-Fi. The scan results could be served as a live JSON endpoint or a browser-based spectrum chart accessible from any device on the same network.</p>
+      </div>
+      <div class="future-card">
+        <div class="future-num">05 / BATTERY</div>
+        <h4>Battery-Powered Portable Unit</h4>
+        <p>Adding a LiPo battery, a TP4056 charging module, and a power switch would make the device fully portable. The ESP32 deep sleep between scan cycles could extend battery life to several days.</p>
+      </div>
+      <div class="future-card">
+        <div class="future-num">06 / ALERT</div>
+        <h4>Threshold Alerts</h4>
+        <p>A passive buzzer or LED bar graph could be added to give audio or visual alerts when a channel exceeds a user-defined hit count, enabling hands-free monitoring in a bag or enclosure.</p>
+      </div>
+      <div class="future-card">
+        <div class="future-num">07 / ENCLOSURE</div>
+        <h4>3D Printed Case</h4>
+        <p>A custom enclosure with a window for the OLED and a recess for the nRF24L01 antenna would protect the hardware and make the device suitable for field use and demonstrations.</p>
+      </div>
+      <div class="future-card">
+        <div class="future-num">08 / DUAL RADIO</div>
+        <h4>Dual nRF24L01 Scanning</h4>
+        <p>Two nRF24L01 modules on the same SPI bus with separate CSN pins could scan in two halves of the band simultaneously, cutting the full-sweep time from one second to roughly 500 milliseconds.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CONTACT -->
+<section class="contact-section" id="contact">
+  <div class="container">
+    <div class="section-label">Get in Touch</div>
+    <h2 class="section-title">Contact</h2>
+    <div class="contact-card">
+      <p>Questions about the project, hardware issues, collaboration proposals, or suggestions for the roadmap are all welcome. Send a message and a reply will follow as soon as possible.</p>
+      <a href="mailto:carmodbhai@gmail.com" class="email-link">carmodbhai@gmail.com</a>
+      <div class="contact-meta">
+        Project: wireless-scanner &nbsp;/&nbsp; License: MIT &nbsp;/&nbsp; Platform: ESP32
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    wireless-scanner &mdash; ESP32 + nRF24L01 + SSD1306 &mdash; MIT License &mdash; carmodbhai@gmail.com
+  </div>
+</footer>
+
+<script>
+// ----- OLED DEMO -----
+const signals = [
+  { ch:1,  hits:58 },
+  { ch:6,  hits:62 },
+  { ch:11, hits:61 },
+  { ch:14, hits:5  },
+  { ch:37, hits:22 },
+  { ch:79, hits:18 },
+  { ch:83, hits:8  },
+];
+
+function buildBar(hits) {
+  const bars = Math.max(1, Math.round((hits / 64) * 10));
+  return 'Sig: [' + '#'.repeat(bars) + '.'.repeat(10 - bars) + ']';
+}
+
+function showChannel(sig) {
+  document.querySelectorAll('.ch-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('btn-ch-' + sig.ch);
+  if (btn) btn.classList.add('active');
+  document.getElementById('oledIdle').style.display = 'none';
+  document.getElementById('oledCh').textContent = 'CH: ' + sig.ch;
+  document.getElementById('oledFreq').textContent = 'Freq: ' + (2400 + sig.ch) + ' MHz';
+  document.getElementById('oledBar').textContent = buildBar(sig.hits);
+  document.getElementById('oledHits').textContent = 'Hits: ' + sig.hits + '/64';
+}
+
+function showIdle() {
+  document.querySelectorAll('.ch-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('oledIdle').style.display = '';
+  document.getElementById('oledCh').textContent = 'CH: --';
+  document.getElementById('oledFreq').textContent = 'Freq: ---- MHz';
+  document.getElementById('oledBar').textContent = 'Sig: [..........]';
+  document.getElementById('oledHits').textContent = 'Hits: --/64';
+}
+
+const list = document.getElementById('channelList');
+signals.forEach(s => {
+  const b = document.createElement('button');
+  b.className = 'ch-btn';
+  b.id = 'btn-ch-' + s.ch;
+  b.textContent = 'CH ' + s.ch;
+  b.onclick = () => showChannel(s);
+  list.appendChild(b);
+});
+
+let scanTimer = null;
+function startScan() {
+  const btn = document.getElementById('scanBtn');
+  if (btn.classList.contains('scanning')) return;
+  btn.classList.add('scanning');
+  btn.textContent = 'Scanning...';
+  showIdle();
+  let i = 0;
+  function next() {
+    if (i >= signals.length) {
+      showIdle();
+      btn.classList.remove('scanning');
+      btn.textContent = 'Run Scan Cycle';
+      return;
+    }
+    showChannel(signals[i]);
+    i++;
+    scanTimer = setTimeout(next, 1800);
+  }
+  setTimeout(next, 800);
+}
+
+// ----- SPECTRUM CANVAS -----
+const canvas = document.getElementById('spectrum');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+  canvas.width = canvas.offsetWidth * window.devicePixelRatio;
+  canvas.height = 160 * window.devicePixelRatio;
+  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+}
+resize();
+window.addEventListener('resize', () => { resize(); });
+
+const wifiChannels = [1,2,3,4,5,6,7,8,9,10,11,12,13];
+const btRange = [32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78];
+
+let noiseData = new Array(128).fill(0).map(() => Math.random() * 12);
+let peakData  = new Array(128).fill(0);
+
+// Seed known signals
+wifiChannels.forEach(c => { peakData[c] = 55 + Math.random() * 25; });
+btRange.forEach(c => { peakData[c] = Math.max(peakData[c], 10 + Math.random() * 20); });
+peakData[79] = 35 + Math.random() * 15;
+
+function drawSpectrum() {
+  const W = canvas.offsetWidth, H = 160;
+  ctx.clearRect(0, 0, W, H);
+
+  // Grid lines
+  ctx.strokeStyle = 'rgba(30,45,61,0.8)';
+  ctx.lineWidth = 0.5;
+  for (let y = 0; y <= H; y += 32) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+
+  const barW = W / 128;
+
+  for (let i = 0; i < 128; i++) {
+    // Animate noise
+    noiseData[i] += (Math.random() - 0.5) * 3;
+    noiseData[i] = Math.max(2, Math.min(15, noiseData[i]));
+
+    // Animate peaks
+    if (peakData[i] > 0) {
+      peakData[i] += (Math.random() - 0.42) * 4;
+      peakData[i] = Math.max(0, Math.min(H - 4, peakData[i]));
+    }
+
+    const total = noiseData[i] + peakData[i];
+    const barH = Math.min(total, H - 2);
+    const x = i * barW;
+
+    let color = 'rgba(0,255,136,0.55)';
+    if (wifiChannels.includes(i)) color = 'rgba(0,229,255,0.75)';
+    else if (btRange.includes(i)) color = 'rgba(255,170,0,0.45)';
+    else if (i === 79) color = 'rgba(0,255,136,0.65)';
+
+    ctx.fillStyle = color;
+    ctx.fillRect(x + 0.5, H - barH, barW - 1, barH);
+  }
+
+  // Legend
+  ctx.font = '10px Share Tech Mono, monospace';
+  ctx.fillStyle = 'rgba(0,229,255,0.7)';
+  ctx.fillText('Wi-Fi CH 1/6/11', 4, 14);
+  ctx.fillStyle = 'rgba(255,170,0,0.7)';
+  ctx.fillText('Bluetooth range', 4, 27);
+  ctx.fillStyle = 'rgba(0,255,136,0.7)';
+  ctx.fillText('Other RF', 4, 40);
+
+  requestAnimationFrame(drawSpectrum);
+}
+drawSpectrum();
+</script>
+</body>
+</html>
