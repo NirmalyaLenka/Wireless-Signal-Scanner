@@ -80,9 +80,7 @@ Install all of the following through the Arduino IDE Library Manager (Sketch > I
 | RF24 | 1.4.x | nRF24L01 driver and RPD access |
 | Adafruit GFX Library | 1.11.x | Graphics primitives for the OLED |
 | Adafruit SSD1306 | 2.5.x | SSD1306 OLED driver |
-| RF24                 | 1.4.x          | nRF24L01 driver and RPD access   |
-| Adafruit GFX Library | 1.11.x         | Graphics primitives for the OLED |
-| Adafruit SSD1306     | 2.5.x          | SSD1306 OLED driver              |
+
  
 You also need the ESP32 board support package installed in Arduino IDE. Follow the official
 Espressif guide at https://docs.espressif.com/projects/arduino-esp32/en/latest/installing.html
