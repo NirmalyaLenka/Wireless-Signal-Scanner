@@ -75,8 +75,11 @@ If the display does not initialise, try changing OLED_I2C_ADDR in the source fil
 Install all of the following through the Arduino IDE Library Manager (Sketch > Include Library
 > Manage Libraries) or through PlatformIO:
  
-| Library              | Version guidance (not verified in this review) | Purpose                          |
-|----------------------|----------------|----------------------------------|
+| Library | Version guidance (not verified in this review) | Purpose |
+|---|---|---|
+| RF24 | 1.4.x | nRF24L01 driver and RPD access |
+| Adafruit GFX Library | 1.11.x | Graphics primitives for the OLED |
+| Adafruit SSD1306 | 2.5.x | SSD1306 OLED driver |
 | RF24                 | 1.4.x          | nRF24L01 driver and RPD access   |
 | Adafruit GFX Library | 1.11.x         | Graphics primitives for the OLED |
 | Adafruit SSD1306     | 2.5.x          | SSD1306 OLED driver              |
@@ -188,8 +191,8 @@ channels if any Wi-Fi networks are nearby.
 ---
  
 ## License
- 
-MIT License. See LICENSE file for full text.
+
+The tracked file `LICENSE (5)` contains the MIT license text. Its suffixed filename is not the conventional `LICENSE` path and may prevent automatic license detection.
 
 
 ---
